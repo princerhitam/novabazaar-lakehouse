@@ -44,24 +44,24 @@
 # ============================================================================
 # STEP 1 — Verify Unity Catalog & Create Custom Schemas
 # ============================================================================
-# We use the catalog 'novamart' as our central container. We create schemas
+# We use the catalog 'novabazaar' as our central container. We create schemas
 # for 'audit' and 'config' to store operational and execution metadata.
 # ============================================================================
 
 # COMMAND ----------
 
-CATALOG = "novamart"
+CATALOG = "novabazaar"
 
 # Create schemas
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.audit")
 spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.config")
 
-print("✅ Schemas verified/created under catalog 'novamart':")
-print("  - novamart.bronze  (Core Bronze tables)")
-print("  - novamart.silver  (Core Silver tables)")
-print("  - novamart.gold    (Core Gold tables)")
-print("  - novamart.audit   (Operational audit tables)")
-print("  - novamart.config  (Metadata configs)")
+print("✅ Schemas verified/created under catalog 'novabazaar':")
+print("  - novabazaar.bronze  (Core Bronze tables)")
+print("  - novabazaar.silver  (Core Silver tables)")
+print("  - novabazaar.gold    (Core Gold tables)")
+print("  - novabazaar.audit   (Operational audit tables)")
+print("  - novabazaar.config  (Metadata configs)")
 
 # COMMAND ----------
 
@@ -188,7 +188,7 @@ print("✅ Table created/verified: novamart.audit.watermark_tracking")
 
 # COMMAND ----------
 
-VOLUME_PATH = "/Volumes/novamart/landing/raw_files"
+VOLUME_PATH = "/Volumes/novabazaar/landing/raw_files"
 
 print("=" * 80)
 print(f"🔍 VERIFYING LANDING VOLUME: {VOLUME_PATH}")
@@ -215,11 +215,11 @@ print("🔍 VERIFYING SCHEMAS & TABLES")
 print("=" * 80)
 
 # Check schemas
-print("\n📋 Schemas in catalog 'novamart':")
+print("\n📋 Schemas in catalog 'novabazaar':")
 display(spark.sql(f"SHOW SCHEMAS IN {CATALOG}"))
 
 # Check tables in audit schema
-print("\n📋 Tables in 'novamart.audit':")
+print("\n📋 Tables in 'novabazaar.audit':")
 display(spark.sql(f"SHOW TABLES IN {CATALOG}.audit"))
 
 print("\n🎉 ENVIRONMENT SETUP COMPLETED SUCCESSFULLY!")
