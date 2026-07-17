@@ -3,7 +3,7 @@
 # COMMAND ----------
 
 # ============================================================================
-# NOTEBOOK: 03_bronze_ingestion_framework (WORKBOOK EDITION)
+# NOTEBOOK: 03_bronze_ingestion_framework
 # ============================================================================
 # Layer        : Bronze (Raw Ingestion)
 # Domain       : Core / Ingestion Framework
@@ -17,7 +17,7 @@
 #
 #   Each section contains:
 #     - A detailed instruction block explaining the What, Why, and How.
-#     - A blank coding block for you to write the code.
+#     - A fully populated, commented code block ready for you to execute.
 # ============================================================================
 
 # COMMAND ----------
@@ -56,10 +56,14 @@ print(f"✅ Setup complete. Config file path: {CONFIG_FILE_PATH}")
 
 # COMMAND ----------
 
-# TODO: Write your code below to load and print the config contents
-# 1. Open the file
-# 2. Parse the JSON
-# 3. Print a confirmation statement
+# 1. Open the source config file in read mode
+with open(CONFIG_FILE_PATH, "r") as f:
+    # 2. Parse the JSON file into a Python dictionary
+    config_data = json.load(f)
+
+# 3. Print the count of sources to verify success
+sources_count = len(config_data["sources"])
+print(f"✅ Successfully loaded configuration. Found {sources_count} source systems.")
 
 # COMMAND ----------
 
@@ -76,10 +80,45 @@ print(f"✅ Setup complete. Config file path: {CONFIG_FILE_PATH}")
 
 # COMMAND ----------
 
-# TODO: Define your log_pipeline_step function below
-# Parameters: pipeline_run_id, step_name, step_sequence, log_level, message, 
-#             records_read=0, records_written=0, start_time=None, end_time=None, 
-#             status="SUCCESS", error_message=""
+def log_pipeline_step(pipeline_run_id, step_name, step_sequence, log_level, message, 
+                      records_read=0, records_written=0, records_rejected=0, 
+                      start_time=None, end_time=None, status="SUCCESS", error_message=""):
+    
+    # 1. Fallback to current time if start/end times aren't provided
+    start_ts = start_time if start_time else datetime.utcnow()
+    end_ts = end_time if end_time else datetime.utcnow()
+    
+    # 2. Calculate duration in seconds
+    duration = (end_ts - start_ts).total_seconds()
+    
+    # 3. Create a single log entry dictionary matching the table schema
+    log_entry = {
+        "log_id": str(uuid.uuid4()),
+        "pipeline_name": "bronze_ingestion_framework",
+        "pipeline_run_id": pipeline_run_id,
+        "step_name": step_name,
+        "step_sequence": int(step_sequence),
+        "log_level": log_level,
+        "message": message,
+        "records_read": int(records_read),
+        "records_written": int(records_written),
+        "records_rejected": int(records_rejected),
+        "start_timestamp": start_ts,
+        "end_timestamp": end_ts,
+        "duration_seconds": float(duration),
+        "status": status,
+        "error_message": error_message,
+        "notebook_path": dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get(),
+        "created_timestamp": datetime.utcnow()
+    }
+    
+    # 4. Convert the dictionary list into a PySpark DataFrame
+    log_df = spark.createDataFrame([log_entry])
+    
+    # 5. Append the DataFrame row directly to the Delta audit table
+    log_df.write.format("delta").mode("append").saveAsTable(f"{CATALOG}.audit.log_pipeline_execution")
+    
+print("✅ log_pipeline_step function registered successfully.")
 
 # COMMAND ----------
 
@@ -102,9 +141,88 @@ print(f"✅ Setup complete. Config file path: {CONFIG_FILE_PATH}")
 
 # COMMAND ----------
 
-# TODO: Implement the ingest_source(source_id, run_id) function below
-# Ensure you wrap the read and write logic in a try-except block so that you can
-# log SUCCESS or FAILED steps in your log_pipeline_execution table!
+def ingest_source(source_id, run_id):
+    start_time = datetime.utcnow()
+    
+    # Find configuration for target source_id
+    src_config = next((s for s in config_data["sources"] if s["source_id"] == source_id), None)
+    
+    if not src_config:
+        raise ValueError(f"❌ Source ID '{source_id}' not found in configuration.")
+        
+    if not src_config.get("is_active", True):
+        print(f"⏭️ Skipping inactive source: {source_id}")
+        return
+        
+    print(f"\n🚀 Ingesting: {source_id} ({src_config['source_name']})")
+    
+    # Extract metadata properties
+    file_format = src_config["file_format"]
+    file_path = src_config["file_path"]
+    bronze_db = src_config["bronze_database"]
+    bronze_table = src_config["bronze_table"]
+    
+    target_table_name = f"{bronze_db}.{bronze_table}"
+    
+    try:
+        # 1. Dynamically configure PySpark Reader
+        reader = spark.read.format(file_format)
+        
+        if file_format == "csv":
+            delimiter = src_config.get("delimiter", ",")
+            header = str(src_config.get("header", "true")).lower()
+            reader = reader.option("sep", delimiter).option("header", header).option("inferSchema", "true")
+            
+        # 2. Read raw files
+        df_raw = reader.load(file_path)
+        records_read = df_raw.count()
+        
+        # 3. Append Audit Metadata Columns (Lineage)
+        df_bronze = df_raw \
+            .withColumn("_source_system", lit(source_id)) \
+            .withColumn("_ingestion_timestamp", current_timestamp()) \
+            .withColumn("_batch_id", lit(run_id)) \
+            .withColumn("_file_name", input_file_name())
+            
+        # 4. Write to managed Delta Bronze table (Append-only)
+        df_bronze.write.format("delta").mode("append").saveAsTable(target_table_name)
+        records_written = df_bronze.count()
+        
+        end_time = datetime.utcnow()
+        
+        # 5. Log success step
+        log_pipeline_step(
+            pipeline_run_id=run_id,
+            step_name=f"ingest_{source_id}",
+            step_sequence=1,
+            log_level="INFO",
+            message=f"Successfully ingested {source_id} to Bronze table: {target_table_name}",
+            records_read=records_read,
+            records_written=records_written,
+            start_time=start_time,
+            end_time=end_time,
+            status="SUCCESS"
+        )
+        print(f"   ✅ Ingestion successful. Written {records_written} records to {target_table_name}")
+        
+    except Exception as e:
+        end_time = datetime.utcnow()
+        err_msg = str(e)
+        
+        # Log failure step
+        log_pipeline_step(
+            pipeline_run_id=run_id,
+            step_name=f"ingest_{source_id}",
+            step_sequence=1,
+            log_level="ERROR",
+            message=f"Failed to ingest {source_id} to Bronze table",
+            start_time=start_time,
+            end_time=end_time,
+            status="FAILED",
+            error_message=err_msg
+        )
+        print(f"   ❌ Ingestion failed for {source_id}: {err_msg}")
+        raise e
 
 # COMMAND ----------
 
@@ -119,7 +237,10 @@ print(f"✅ Setup complete. Config file path: {CONFIG_FILE_PATH}")
 
 # COMMAND ----------
 
-# TODO: Generate a test run ID and call ingest_source for "olist_sellers"
+test_run_id = str(uuid.uuid4())
+print(f"🔑 Test Ingestion Run ID: {test_run_id}")
+
+ingest_source("olist_sellers", test_run_id)
 
 # COMMAND ----------
 
@@ -135,7 +256,27 @@ print(f"✅ Setup complete. Config file path: {CONFIG_FILE_PATH}")
 
 # COMMAND ----------
 
-# TODO: Implement the batch ingestion loop and print a final run summary report.
+batch_run_id = str(uuid.uuid4())
+print(f"🔑 Production Ingestion Batch Run ID: {batch_run_id}")
+
+success_sources = []
+failed_sources = []
+
+for src in config_data["sources"]:
+    src_id = src["source_id"]
+    if src.get("is_active", True) and src_id != "olist_sellers": # Skip sellers as we already tested it
+        try:
+            ingest_source(src_id, batch_run_id)
+            success_sources.append(src_id)
+        except Exception as e:
+            failed_sources.append(src_id)
+
+print("\n" + "=" * 50)
+print("🏁 BATCH RUN SUMMARY")
+print("=" * 50)
+print(f"   Success ({len(success_sources) + 1}): ['olist_sellers'] + {success_sources}")
+print(f"   Failures ({len(failed_sources)}): {failed_sources}")
+print("=" * 50)
 
 # COMMAND ----------
 
@@ -150,11 +291,13 @@ print(f"✅ Setup complete. Config file path: {CONFIG_FILE_PATH}")
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC -- Write a SQL query below to select and view the newest pipeline execution logs
-# MAGIC -- TODO: SELECT * FROM ...
+# MAGIC -- Verify execution logs
+# MAGIC SELECT pipeline_run_id, step_name, records_read, records_written, status, duration_seconds 
+# MAGIC FROM novabazaar.audit.log_pipeline_execution
+# MAGIC ORDER BY start_timestamp DESC;
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC -- Write a SQL query below to sample the first 5 rows of the bronze sellers table
-# MAGIC -- TODO: SELECT * FROM ...
+# MAGIC -- Sample query from bronze sellers
+# MAGIC SELECT * FROM novabazaar.bronze.olist_sellers LIMIT 5;
