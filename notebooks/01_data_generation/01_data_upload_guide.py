@@ -57,8 +57,8 @@
 
 # COMMAND ----------
 
-# DBFS Target Base Path
-BASE_LANDING_PATH = "/FileStore/novabazaar/landing"
+# Unity Catalog Volumes Target Base Path
+BASE_LANDING_PATH = "/Volumes/novamart/landing/raw_files"
 
 # Source File Metadata Mapping
 source_files = {
