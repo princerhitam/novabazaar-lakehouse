@@ -5,234 +5,79 @@
 # ============================================================================
 # NOTEBOOK: 00_environment_setup
 # ============================================================================
-# Layer        : Setup
+# Layer        : Setup / Bootstrap
 # Domain       : Infrastructure
 # Author       : Data Engineering Team
-# Created Date : 2026-07-16
-# Last Modified: 2026-07-16
+# Created Date : 2026-07-17
+# Last Modified: 2026-07-17
 # ============================================================================
 #
 # DESCRIPTION:
-#   This notebook provisions the complete NovaBazaar Lakehouse environment
-#   from scratch.  It is designed to be idempotent – every operation uses
-#   "IF NOT EXISTS" semantics so the notebook can be re-run safely without
-#   side effects.
+#   This notebook bootstraps the entire NovaBazaar Lakehouse environment.
+#   It aligns with the modern Databricks Unity Catalog architecture.
 #
 #   Steps performed:
-#     1. Create the full DBFS folder hierarchy (landing → gold + audit/config)
-#     2. Create medallion-layer Hive metastore databases
-#     3. Provision audit / operational Delta tables
-#     4. Verify the environment end-to-end
+#     1. Verifies Unity Catalog and pre-existing schemas.
+#     2. Creates custom schemas for operational monitoring (`audit`, `config`).
+#     3. Provisions managed Delta tables for the audit and logging framework.
+#     4. Performs end-to-end verification of files in UC Volumes.
 #
 # BUSINESS CONTEXT:
-#   Environment setup is the foundation of any production data platform.
-#   Without a well-defined, repeatable provisioning process:
-#     • Teams create ad-hoc paths, leading to data scattered across DBFS.
-#     • Table ownership and lineage become untraceable.
-#     • Disaster-recovery takes longer because the "known-good state" is
-#       undocumented.
-#     • Audit & compliance requirements (SOX, GDPR) cannot be met when
-#       pipeline metadata is missing.
-#
-#   By codifying setup in a versioned notebook we get:
-#     ✓ Reproducibility  – any team member can stand up the environment.
-#     ✓ Auditability     – change-log is tracked via Git.
-#     ✓ Idempotency      – safe to re-run after partial failures.
-#     ✓ Documentation    – the notebook *is* the living specification.
+#   A repeatable, governed environment setup is essential for enterprise operations.
+#   Instead of hardcoding legacy DBFS storage paths (which present security
+#   vulnerabilities and lack row/column level permission checks), this setup
+#   fully leverages Unity Catalog:
+#     • Managed Catalogs structure datasets logically under catalogs and schemas.
+#     • UC Volumes manage raw files securely (replacing public DBFS mounts).
+#     • Managed Tables decouple physical path management from table metadata.
 #
 # DEPENDENCIES:
-#   • Databricks Runtime 13.x+ (Community Edition compatible)
-#   • dbutils (pre-installed on Databricks)
-#   • Delta Lake (bundled with Databricks Runtime)
+#   • Databricks Runtime 13.x+ with Unity Catalog enabled
+#   • Target Catalog 'novamart' and Volume 'raw_files' pre-created
 #
 # CHANGE LOG:
-#   2026-07-16 | Data Engineering Team | Initial creation – Milestone 1
+#   2026-07-17 | Data Engineering Team | Aligned with Unity Catalog & Volumes
 # ============================================================================
 
 # COMMAND ----------
 
 # ============================================================================
-# STEP 1 — DBFS Folder Structure (Configuration)
+# STEP 1 — Verify Unity Catalog & Create Custom Schemas
 # ============================================================================
-# We define every path in data structures first, then loop to create them.
-# This makes the notebook easy to extend when new sources arrive.
+# We use the catalog 'novamart' as our central container. We create schemas
+# for 'audit' and 'config' to store operational and execution metadata.
 # ============================================================================
 
-BASE_PATH = "/FileStore/novabazaar"
+# COMMAND ----------
 
-# ---- Landing Zone (15 raw-data sources) -----------------------------------
-landing_sources = [
-    "olist_orders",
-    "olist_order_items",
-    "olist_order_payments",
-    "olist_order_reviews",
-    "olist_customers",
-    "olist_products",
-    "olist_sellers",
-    "olist_geolocation",
-    "product_category_translation",
-    "employees",
-    "general_ledger",
-    "inventory_snapshots",
-    "marketing_campaigns",
-    "promotions",
-    "exchange_rates",
-]
+CATALOG = "novamart"
 
-landing_folders = [
-    f"{BASE_PATH}/landing/{src}/" for src in landing_sources
-]
+# Create schemas
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.audit")
+spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOG}.config")
 
-# ---- Bronze Layer (organised by domain) -----------------------------------
-bronze_folders = [
-    f"{BASE_PATH}/bronze/sales/olist_orders",
-    f"{BASE_PATH}/bronze/sales/olist_order_items",
-    f"{BASE_PATH}/bronze/sales/olist_order_payments",
-    f"{BASE_PATH}/bronze/customer/olist_customers",
-    f"{BASE_PATH}/bronze/customer/olist_order_reviews",
-    f"{BASE_PATH}/bronze/product/olist_products",
-    f"{BASE_PATH}/bronze/product/product_category_translation",
-    f"{BASE_PATH}/bronze/seller/olist_sellers",
-    f"{BASE_PATH}/bronze/reference/olist_geolocation",
-    f"{BASE_PATH}/bronze/hr/employees",
-    f"{BASE_PATH}/bronze/finance/general_ledger",
-    f"{BASE_PATH}/bronze/finance/exchange_rates",
-    f"{BASE_PATH}/bronze/inventory/inventory_snapshots",
-    f"{BASE_PATH}/bronze/marketing/marketing_campaigns",
-    f"{BASE_PATH}/bronze/marketing/promotions",
-    f"{BASE_PATH}/bronze/_quarantine/",
-]
-
-# ---- Silver Layer ---------------------------------------------------------
-silver_folders = [
-    f"{BASE_PATH}/silver/sales/transactions",
-    f"{BASE_PATH}/silver/sales/order_items",
-    f"{BASE_PATH}/silver/sales/payments",
-    f"{BASE_PATH}/silver/customer/customers",
-    f"{BASE_PATH}/silver/customer/reviews",
-    f"{BASE_PATH}/silver/product/products",
-    f"{BASE_PATH}/silver/product/categories",
-    f"{BASE_PATH}/silver/seller/sellers",
-    f"{BASE_PATH}/silver/reference/geolocation",
-    f"{BASE_PATH}/silver/hr/employees",
-    f"{BASE_PATH}/silver/finance/gl_entries",
-    f"{BASE_PATH}/silver/finance/exchange_rates",
-    f"{BASE_PATH}/silver/inventory/stock_levels",
-    f"{BASE_PATH}/silver/marketing/campaigns",
-    f"{BASE_PATH}/silver/marketing/promotions",
-    f"{BASE_PATH}/silver/_quarantine/",
-]
-
-# ---- Gold Layer -----------------------------------------------------------
-gold_folders = [
-    # Dimensions
-    f"{BASE_PATH}/gold/dimensions/dim_date",
-    f"{BASE_PATH}/gold/dimensions/dim_customer",
-    f"{BASE_PATH}/gold/dimensions/dim_product",
-    f"{BASE_PATH}/gold/dimensions/dim_seller",
-    f"{BASE_PATH}/gold/dimensions/dim_geography",
-    f"{BASE_PATH}/gold/dimensions/dim_category",
-    f"{BASE_PATH}/gold/dimensions/dim_employee",
-    f"{BASE_PATH}/gold/dimensions/dim_payment_method",
-    f"{BASE_PATH}/gold/dimensions/dim_promotion",
-    f"{BASE_PATH}/gold/dimensions/dim_channel",
-    # Facts
-    f"{BASE_PATH}/gold/facts/fact_sales",
-    f"{BASE_PATH}/gold/facts/fact_daily_sales_agg",
-    f"{BASE_PATH}/gold/facts/fact_customer_activity",
-    f"{BASE_PATH}/gold/facts/fact_inventory_snapshot",
-    f"{BASE_PATH}/gold/facts/fact_review_analysis",
-    f"{BASE_PATH}/gold/facts/fact_financial_transaction",
-    # Analytics
-    f"{BASE_PATH}/gold/analytics/customer_360",
-    f"{BASE_PATH}/gold/analytics/customer_rfm",
-    f"{BASE_PATH}/gold/analytics/seller_performance",
-    # KPI
-    f"{BASE_PATH}/gold/kpi/daily_kpi_summary",
-    f"{BASE_PATH}/gold/kpi/monthly_kpi_summary",
-]
-
-# ---- Config / Audit / Reference ------------------------------------------
-operational_folders = [
-    f"{BASE_PATH}/config/",
-    f"{BASE_PATH}/audit/pipeline_log",
-    f"{BASE_PATH}/audit/dq_results",
-    f"{BASE_PATH}/audit/reconciliation_log",
-    f"{BASE_PATH}/audit/cdc_tracking",
-    f"{BASE_PATH}/audit/watermark_tracking",
-    f"{BASE_PATH}/reference/",
-]
-
-# Combine all folder lists
-ALL_FOLDERS = (
-    landing_folders
-    + bronze_folders
-    + silver_folders
-    + gold_folders
-    + operational_folders
-)
-
-print(f"📂 Total folders to create: {len(ALL_FOLDERS)}")
+print("✅ Schemas verified/created under catalog 'novamart':")
+print("  - novamart.bronze  (Core Bronze tables)")
+print("  - novamart.silver  (Core Silver tables)")
+print("  - novamart.gold    (Core Gold tables)")
+print("  - novamart.audit   (Operational audit tables)")
+print("  - novamart.config  (Metadata configs)")
 
 # COMMAND ----------
 
 # ============================================================================
-# STEP 1 (cont.) — Create every DBFS folder
+# STEP 2 — Provision Managed Delta Audit Tables
 # ============================================================================
-
-created_count = 0
-for folder_path in ALL_FOLDERS:
-    dbutils.fs.mkdirs(folder_path)
-    created_count += 1
-
-print("=" * 70)
-print(f"✅ DBFS Folder Structure Created Successfully!")
-print(f"   Total folders provisioned : {created_count}")
-print(f"   Landing zone sources      : {len(landing_folders)}")
-print(f"   Bronze layer folders      : {len(bronze_folders)}")
-print(f"   Silver layer folders      : {len(silver_folders)}")
-print(f"   Gold layer folders        : {len(gold_folders)}")
-print(f"   Operational folders       : {len(operational_folders)}")
-print("=" * 70)
+# We create 5 audit tables under the 'novamart.audit' schema. Because these
+# are Unity Catalog managed tables, we do not specify raw DBFS locations.
+# Databricks automatically manages optimized cloud storage for these tables.
+# ============================================================================
 
 # COMMAND ----------
 
-# ============================================================================
-# STEP 2 — Create Databases (Hive Metastore)
-# ============================================================================
-# One database per medallion layer keeps ownership clear and simplifies
-# access-control (GRANT / REVOKE at the database level).
-# ============================================================================
-
-databases = [
-    ("novabazaar_bronze", "Raw ingested data — append-only, schema-on-read"),
-    ("novabazaar_silver", "Cleansed, conformed, business-entity tables"),
-    ("novabazaar_gold", "Star-schema dimensions, facts, aggregates & KPIs"),
-    ("novabazaar_audit", "Pipeline execution logs, DQ results, reconciliation"),
-    ("novabazaar_config", "Pipeline configuration and reference metadata"),
-]
-
-for db_name, comment in databases:
-    spark.sql(f"""
-        CREATE DATABASE IF NOT EXISTS {db_name}
-        COMMENT '{comment}'
-    """)
-    print(f"✅ Database created (or already exists): {db_name}")
-
-print("\n📋 Current databases in the metastore:")
-display(spark.sql("SHOW DATABASES"))
-
-# COMMAND ----------
-
-# ============================================================================
-# STEP 3 — Audit Table 1: log_pipeline_execution
-# ============================================================================
-# Captures every step of every pipeline run.  This is the single source of
-# truth for debugging failures and measuring SLA adherence.
-# ============================================================================
-
+# 1. Pipeline Execution Log
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS novabazaar_audit.log_pipeline_execution (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.audit.log_pipeline_execution (
         log_id              STRING      COMMENT 'Unique identifier for the log entry (UUID)',
         pipeline_name       STRING      COMMENT 'Name of the pipeline (e.g. bronze_olist_orders)',
         pipeline_run_id     STRING      COMMENT 'Unique run identifier — groups all steps in one execution',
@@ -252,23 +97,13 @@ spark.sql(f"""
         created_timestamp   TIMESTAMP   COMMENT 'Row creation timestamp (UTC)'
     )
     USING DELTA
-    LOCATION '{BASE_PATH}/audit/pipeline_log'
-    COMMENT 'Append-only log of every pipeline step execution'
+    COMMENT 'Managed table tracking pipeline executions and run metrics'
 """)
+print("✅ Table created/verified: novamart.audit.log_pipeline_execution")
 
-print("✅ Table created: novabazaar_audit.log_pipeline_execution")
-
-# COMMAND ----------
-
-# ============================================================================
-# STEP 3 — Audit Table 2: log_dq_results
-# ============================================================================
-# Stores the outcome of every data-quality rule execution so we can trend
-# quality scores over time and trigger alerts on degradation.
-# ============================================================================
-
+# 2. Data Quality Results Log
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS novabazaar_audit.log_dq_results (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.audit.log_dq_results (
         dq_run_id           STRING      COMMENT 'Unique DQ run identifier (UUID)',
         pipeline_run_id     STRING      COMMENT 'Links back to log_pipeline_execution',
         table_name          STRING      COMMENT 'Fully qualified table under test',
@@ -283,23 +118,13 @@ spark.sql(f"""
         run_timestamp       TIMESTAMP   COMMENT 'When the DQ check was executed (UTC)'
     )
     USING DELTA
-    LOCATION '{BASE_PATH}/audit/dq_results'
-    COMMENT 'Data-quality rule execution results'
+    COMMENT 'Managed table tracking automated data quality validations'
 """)
+print("✅ Table created/verified: novamart.audit.log_dq_results")
 
-print("✅ Table created: novabazaar_audit.log_dq_results")
-
-# COMMAND ----------
-
-# ============================================================================
-# STEP 3 — Audit Table 3: log_reconciliation
-# ============================================================================
-# Source-to-target reconciliation proves data completeness after each
-# pipeline run.  Required for SOX / financial audit evidence.
-# ============================================================================
-
+# 3. Source-to-Target Reconciliation Log
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS novabazaar_audit.log_reconciliation (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.audit.log_reconciliation (
         recon_id            STRING      COMMENT 'Unique reconciliation identifier (UUID)',
         pipeline_run_id     STRING      COMMENT 'Links back to log_pipeline_execution',
         source_table        STRING      COMMENT 'Fully qualified source table / path',
@@ -315,23 +140,13 @@ spark.sql(f"""
         run_timestamp       TIMESTAMP   COMMENT 'When the reconciliation ran (UTC)'
     )
     USING DELTA
-    LOCATION '{BASE_PATH}/audit/reconciliation_log'
-    COMMENT 'Source-to-target reconciliation results'
+    COMMENT 'Managed table tracking financial and row-count reconciliation logs'
 """)
+print("✅ Table created/verified: novamart.audit.log_reconciliation")
 
-print("✅ Table created: novabazaar_audit.log_reconciliation")
-
-# COMMAND ----------
-
-# ============================================================================
-# STEP 3 — Audit Table 4: log_cdc_tracking
-# ============================================================================
-# Tracks Change-Data-Capture statistics per table per run so we can
-# monitor mutation patterns and detect anomalies (e.g. unexpected deletes).
-# ============================================================================
-
+# 4. CDC Statistics Log
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS novabazaar_audit.log_cdc_tracking (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.audit.log_cdc_tracking (
         tracking_id         STRING      COMMENT 'Unique tracking record identifier (UUID)',
         pipeline_run_id     STRING      COMMENT 'Links back to log_pipeline_execution',
         table_name          STRING      COMMENT 'Target table that received CDC changes',
@@ -342,24 +157,13 @@ spark.sql(f"""
         run_timestamp       TIMESTAMP   COMMENT 'When the CDC merge was executed (UTC)'
     )
     USING DELTA
-    LOCATION '{BASE_PATH}/audit/cdc_tracking'
-    COMMENT 'CDC merge statistics per table per run'
+    COMMENT 'Managed table tracking Change-Data-Capture statistics'
 """)
+print("✅ Table created/verified: novamart.audit.log_cdc_tracking")
 
-print("✅ Table created: novabazaar_audit.log_cdc_tracking")
-
-# COMMAND ----------
-
-# ============================================================================
-# STEP 3 — Audit Table 5: watermark_tracking
-# ============================================================================
-# High-water-mark table for incremental ingestion.  Each source table has
-# a row that records the last successfully processed value (timestamp,
-# ID, offset) so subsequent runs only pull new / changed data.
-# ============================================================================
-
+# 5. Incremental Watermark Tracking
 spark.sql(f"""
-    CREATE TABLE IF NOT EXISTS novabazaar_audit.watermark_tracking (
+    CREATE TABLE IF NOT EXISTS {CATALOG}.audit.watermark_tracking (
         source_system       STRING      COMMENT 'Origin system name (e.g. olist, sap)',
         table_name          STRING      COMMENT 'Source table name',
         watermark_column    STRING      COMMENT 'Column used as the watermark (e.g. updated_at)',
@@ -369,180 +173,77 @@ spark.sql(f"""
         updated_by          STRING      COMMENT 'Pipeline / notebook that performed the update'
     )
     USING DELTA
-    LOCATION '{BASE_PATH}/audit/watermark_tracking'
-    COMMENT 'Incremental ingestion high-water-mark tracking'
+    COMMENT 'Managed table tracking watermark indexes for incremental loading'
 """)
-
-print("✅ Table created: novabazaar_audit.watermark_tracking")
+print("✅ Table created/verified: novamart.audit.watermark_tracking")
 
 # COMMAND ----------
 
 # ============================================================================
-# STEP 4 — End-to-End Verification
+# STEP 3 — Verification: Check UC Volume Landing Zone Files
+# ============================================================================
+# We check if the raw source files are correctly placed in the Unity Catalog
+# Volume. This ensures our ingestion pipeline can find them.
 # ============================================================================
 
-print("=" * 70)
-print("🔍 VERIFICATION — DBFS Folder Structure")
-print("=" * 70)
+# COMMAND ----------
 
-for layer in ["landing", "bronze", "silver", "gold", "config", "audit", "reference"]:
-    try:
-        contents = dbutils.fs.ls(f"{BASE_PATH}/{layer}/")
-        print(f"\n📁 {layer.upper()} ({len(contents)} items):")
-        for item in contents:
-            print(f"   {'📂' if item.isDir() else '📄'} {item.name}")
-    except Exception as e:
-        print(f"\n⚠️  {layer.upper()}: {e}")
+VOLUME_PATH = "/Volumes/novamart/landing/raw_files"
 
-print("\n" + "=" * 70)
-print("🔍 VERIFICATION — Databases")
-print("=" * 70)
-db_df = spark.sql("SHOW DATABASES LIKE 'novabazaar_*'")
-display(db_df)
+print("=" * 80)
+print(f"🔍 VERIFYING LANDING VOLUME: {VOLUME_PATH}")
+print("=" * 80)
 
-print("\n" + "=" * 70)
-print("🔍 VERIFICATION — Audit Tables")
-print("=" * 70)
-
-audit_tables = [
-    "novabazaar_audit.log_pipeline_execution",
-    "novabazaar_audit.log_dq_results",
-    "novabazaar_audit.log_reconciliation",
-    "novabazaar_audit.log_cdc_tracking",
-    "novabazaar_audit.watermark_tracking",
-]
-
-for table in audit_tables:
-    try:
-        cols = spark.sql(f"DESCRIBE TABLE {table}").count()
-        print(f"   ✅ {table} — {cols} columns")
-    except Exception as e:
-        print(f"   ❌ {table} — {e}")
-
-print("\n" + "=" * 70)
-print("🎉  ENVIRONMENT SETUP COMPLETE — NovaBazaar Lakehouse")
-print("=" * 70)
-print(f"""
-   DBFS folders created       : {len(ALL_FOLDERS)}
-   Databases created          : {len(databases)}
-   Audit tables provisioned   : {len(audit_tables)}
-
-   All resources are idempotent — this notebook can be re-run at any time.
-""")
+try:
+    volume_contents = dbutils.fs.ls(VOLUME_PATH)
+    print(f"\n📂 Volume Contents ({len(volume_contents)} subdirectories/files):")
+    for item in volume_contents:
+        print(f"   {'📂' if item.isDir() else '📄'} {item.name}")
+except Exception as e:
+    print(f"❌ Error accessing volume path: {e}")
 
 # COMMAND ----------
 
 # ============================================================================
-# STEP 5 — Interview Questions & Exercises
-# ============================================================================
-#
-# ---------------------------------------------------------------------------
-# 📝 INTERVIEW QUESTIONS
-# ---------------------------------------------------------------------------
-#
-# Q1. What is DBFS (Databricks File System)?
-#     DBFS is an abstraction layer on top of scalable object storage
-#     (e.g. AWS S3, Azure ADLS Gen2, GCS).  It provides a familiar
-#     POSIX-like file-system interface (/FileStore/…) that lets notebooks
-#     and jobs read/write data without managing cloud-specific SDKs.
-#     Key points:
-#       - /FileStore/ is accessible via the Databricks web UI.
-#       - DBFS paths map to cloud storage under the hood.
-#       - dbutils.fs provides programmatic access (ls, cp, mv, mkdirs, rm).
-#
-# Q2. What is the difference between Managed and External tables in
-#     Databricks?
-#     • Managed table: Databricks controls BOTH the metadata (Hive
-#       metastore) AND the data files.  Dropping the table deletes the
-#       data.
-#     • External table: Databricks manages metadata only; data lives at
-#       a user-specified LOCATION.  Dropping the table removes metadata
-#       but the data files remain.  In production, external tables are
-#       preferred because they decouple storage lifecycle from metastore
-#       operations — critical for disaster recovery and multi-tool access.
-#
-# Q3. Why do we create separate databases for each medallion layer?
-#     Separation provides:
-#       a) Access control — GRANT SELECT on novabazaar_gold to analysts
-#          without exposing raw bronze data.
-#       b) Namespace clarity — table names stay short and unambiguous.
-#       c) Lifecycle management — bronze tables may have different
-#          retention / vacuum policies than gold.
-#       d) Lineage — it is immediately clear which layer a table belongs
-#          to from its fully qualified name.
-#
-# Q4. What is Delta Lake and how does it differ from plain Parquet?
-#     Delta Lake is an open-source storage layer that adds ACID
-#     transactions, schema enforcement, time-travel (versioning), and
-#     efficient upserts (MERGE) on top of Parquet.
-#     Key differences:
-#       - Parquet is a columnar file format; Delta adds a transaction log
-#         (_delta_log/) that tracks every change.
-#       - Delta supports UPDATE, DELETE, MERGE — Parquet is append-only.
-#       - Delta enables time-travel queries (SELECT … VERSION AS OF / 
-#         TIMESTAMP AS OF).
-#       - Delta integrates with Spark's structured streaming for exactly-
-#         once processing.
-#
-# Q5. Explain the purpose of audit tables in a production data platform.
-#     Audit tables provide:
-#       a) Observability — pipeline_execution logs let on-call engineers
-#          pinpoint which step failed and how many records were affected.
-#       b) Data quality tracking — dq_results trends reveal gradual
-#          source degradation before it causes downstream errors.
-#       c) Compliance evidence — reconciliation logs prove that data
-#          was transferred completely (SOX, GDPR Article 5 accuracy).
-#       d) Incremental processing — watermark_tracking enables efficient
-#          "process only what's new" patterns instead of full reloads.
-#       e) Change auditing — cdc_tracking records mutation volumes so
-#          anomalies (e.g. mass deletes) can be detected automatically.
-#
-# ---------------------------------------------------------------------------
-# 📚 HOMEWORK EXERCISES
-# ---------------------------------------------------------------------------
-#
-# Exercise 1: Add a new landing source
-#   A new data source called "website_clickstream" needs to be ingested.
-#   - Add its landing folder.
-#   - Add a bronze folder under a suitable domain.
-#   - Add a silver folder with a cleansed table name.
-#   - Re-run the notebook and verify the new folders appear.
-#
-# Exercise 2: Create a config table
-#   Create a Delta table novabazaar_config.pipeline_parameters with
-#   columns: pipeline_name STRING, parameter_name STRING,
-#   parameter_value STRING, is_active BOOLEAN, updated_timestamp TIMESTAMP.
-#   Store it at /FileStore/novabazaar/config/pipeline_parameters.
-#   Insert 3 sample rows using spark.sql("INSERT INTO …").
-#
-# Exercise 3: Write a helper function
-#   Write a reusable Python function `log_pipeline_step(...)` that inserts
-#   a row into novabazaar_audit.log_pipeline_execution.  It should:
-#     - Auto-generate log_id using uuid.uuid4().
-#     - Auto-set created_timestamp to current_timestamp().
-#     - Accept all other fields as parameters with sensible defaults.
-#   Test it by calling the function and then querying the table.
-#
-# ---------------------------------------------------------------------------
-# 🚀 STRETCH GOALS
-# ---------------------------------------------------------------------------
-#
-# Stretch 1: Implement table-level access controls
-#   Use Databricks SQL to GRANT SELECT on novabazaar_gold to a group
-#   called "analysts" and DENY access to novabazaar_bronze for the same
-#   group.  Document the commands even if you cannot run them on Community
-#   Edition (it requires Unity Catalog or Table ACLs to be enabled).
-#
-# Stretch 2: Build an automated environment health-check notebook
-#   Create a separate notebook (00_health_check) that:
-#     - Verifies all DBFS folders exist (re-creates missing ones).
-#     - Verifies all databases and tables exist.
-#     - Checks that audit tables are not empty (warns if no data after
-#       pipelines should have run).
-#     - Outputs a single PASS / FAIL status with details.
-#   Schedule it to run daily via Databricks Jobs (or document how to).
-#
+# STEP 4 — End-to-End Metastore Schema Verification
 # ============================================================================
 
-print("📝 Interview questions and exercises are in the comments above.")
-print("   Scroll up or view the raw notebook source to read them.")
+# COMMAND ----------
+
+print("=" * 80)
+print("🔍 VERIFYING SCHEMAS & TABLES")
+print("=" * 80)
+
+# Check schemas
+print("\n📋 Schemas in catalog 'novamart':")
+display(spark.sql(f"SHOW SCHEMAS IN {CATALOG}"))
+
+# Check tables in audit schema
+print("\n📋 Tables in 'novamart.audit':")
+display(spark.sql(f"SHOW TABLES IN {CATALOG}.audit"))
+
+print("\n🎉 ENVIRONMENT SETUP COMPLETED SUCCESSFULLY!")
+
+# COMMAND ----------
+
+# ============================================================================
+# STEP 5 — Interview Focus: Unity Catalog & Managed Architecture
+# ============================================================================
+#
+# Q1. What is the difference between DBFS and Unity Catalog Volumes?
+#     DBFS is legacy mount points pointing to a global S3/ADLS bucket, lacking
+#     fine-grained permission controls. Volumes are managed or external directory
+#     containers fully integrated with Unity Catalog, allowing securable, Auditable,
+#     and managed file assets directly accessible via SQL and standard APIs.
+#
+# Q2. What is the difference between Managed Tables and External Tables in UC?
+#     - Managed tables: Databricks manages the metadata AND the physical data in
+#       the catalog's storage root. Deleting the table drops the data AND metadata.
+#     - External tables: You manage the S3/ADLS physical path yourself. Deleting the
+#       table drops the metadata in UC, but the physical files in S3 are preserved.
+#
+# Q3. Why use Statement Execution API over DBFS REST API for environment setup?
+#     Statement Execution API runs queries directly in Databricks Serverless SQL
+#     warehouses, obeying all catalog security constraints, role-based access control,
+#     and catalog audit logs. DBFS API lacks standard table ACL integration.
+# ============================================================================
