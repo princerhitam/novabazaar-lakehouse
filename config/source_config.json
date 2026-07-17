@@ -5,14 +5,16 @@
       "source_name": "Olist Orders",
       "domain": "sales",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_orders/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_orders/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_orders",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_orders",
-      "primary_key": ["order_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_orders",
+      "primary_key": [
+        "order_id"
+      ],
       "is_active": true
     },
     {
@@ -20,14 +22,17 @@
       "source_name": "Olist Order Items",
       "domain": "sales",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_order_items/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_order_items/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_order_items",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_order_items",
-      "primary_key": ["order_id", "order_item_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_order_items",
+      "primary_key": [
+        "order_id",
+        "order_item_id"
+      ],
       "is_active": true
     },
     {
@@ -35,14 +40,17 @@
       "source_name": "Olist Order Payments",
       "domain": "sales",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_order_payments/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_order_payments/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_order_payments",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_order_payments",
-      "primary_key": ["order_id", "payment_sequential"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_order_payments",
+      "primary_key": [
+        "order_id",
+        "payment_sequential"
+      ],
       "is_active": true
     },
     {
@@ -50,14 +58,16 @@
       "source_name": "Olist Order Reviews",
       "domain": "customer",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_order_reviews/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_order_reviews/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_order_reviews",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_order_reviews",
-      "primary_key": ["review_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_order_reviews",
+      "primary_key": [
+        "review_id"
+      ],
       "is_active": true
     },
     {
@@ -65,14 +75,16 @@
       "source_name": "Olist Customers",
       "domain": "customer",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_customers/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_customers/",
       "load_pattern": "cdc",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_customers",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_customers",
-      "primary_key": ["customer_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_customers",
+      "primary_key": [
+        "customer_id"
+      ],
       "is_active": true
     },
     {
@@ -80,14 +92,16 @@
       "source_name": "Olist Products",
       "domain": "product",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_products/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_products/",
       "load_pattern": "cdc",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_products",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_products",
-      "primary_key": ["product_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_products",
+      "primary_key": [
+        "product_id"
+      ],
       "is_active": true
     },
     {
@@ -95,14 +109,16 @@
       "source_name": "Olist Sellers",
       "domain": "seller",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_sellers/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_sellers/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_sellers",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_sellers",
-      "primary_key": ["seller_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_sellers",
+      "primary_key": [
+        "seller_id"
+      ],
       "is_active": true
     },
     {
@@ -110,14 +126,16 @@
       "source_name": "Olist Geolocation",
       "domain": "reference",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/olist_geolocation/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/olist_geolocation/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "olist_geolocation",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/olist_geolocation",
-      "primary_key": ["geolocation_zip_code_prefix"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/olist_geolocation",
+      "primary_key": [
+        "geolocation_zip_code_prefix"
+      ],
       "is_active": true
     },
     {
@@ -125,14 +143,16 @@
       "source_name": "Product Category Translation",
       "domain": "product",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/product_category_translation/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/product_category_translation/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "product_category_translation",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/product_category_translation",
-      "primary_key": ["product_category_name"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/product_category_translation",
+      "primary_key": [
+        "product_category_name"
+      ],
       "is_active": true
     },
     {
@@ -140,14 +160,16 @@
       "source_name": "Employees",
       "domain": "hr",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/employees/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/employees/",
       "load_pattern": "cdc",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "employees",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/employees",
-      "primary_key": ["employee_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/employees",
+      "primary_key": [
+        "employee_id"
+      ],
       "is_active": true
     },
     {
@@ -155,14 +177,16 @@
       "source_name": "General Ledger",
       "domain": "finance",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/general_ledger/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/general_ledger/",
       "load_pattern": "incremental",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "general_ledger",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/general_ledger",
-      "primary_key": ["entry_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/general_ledger",
+      "primary_key": [
+        "entry_id"
+      ],
       "is_active": true
     },
     {
@@ -170,12 +194,15 @@
       "source_name": "Inventory Snapshots",
       "domain": "inventory",
       "file_format": "json",
-      "file_path": "/Volumes/novamart/landing/raw_files/inventory_snapshots/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/inventory_snapshots/",
       "load_pattern": "snapshot",
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "inventory_snapshots",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/inventory_snapshots",
-      "primary_key": ["product_id", "snapshot_date"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/inventory_snapshots",
+      "primary_key": [
+        "product_id",
+        "snapshot_date"
+      ],
       "is_active": true
     },
     {
@@ -183,12 +210,14 @@
       "source_name": "Marketing Campaigns",
       "domain": "marketing",
       "file_format": "json",
-      "file_path": "/Volumes/novamart/landing/raw_files/marketing_campaigns/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/marketing_campaigns/",
       "load_pattern": "full",
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "marketing_campaigns",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/marketing_campaigns",
-      "primary_key": ["campaign_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/marketing_campaigns",
+      "primary_key": [
+        "campaign_id"
+      ],
       "is_active": true
     },
     {
@@ -196,14 +225,16 @@
       "source_name": "Promotions",
       "domain": "marketing",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/promotions/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/promotions/",
       "load_pattern": "cdc",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "promotions",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/promotions",
-      "primary_key": ["promotion_id"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/promotions",
+      "primary_key": [
+        "promotion_id"
+      ],
       "is_active": true
     },
     {
@@ -211,14 +242,17 @@
       "source_name": "Exchange Rates",
       "domain": "finance",
       "file_format": "csv",
-      "file_path": "/Volumes/novamart/landing/raw_files/exchange_rates/",
+      "file_path": "/Volumes/novabazaar/landing/raw_files/exchange_rates/",
       "load_pattern": "full",
       "delimiter": ",",
       "header": true,
-      "bronze_database": "novabazaar_bronze",
+      "bronze_database": "novabazaar.bronze",
       "bronze_table": "exchange_rates",
-      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar_bronze.db/exchange_rates",
-      "primary_key": ["date", "currency"],
+      "bronze_path": "dbfs:/user/hive/warehouse/novabazaar.db/bronze/exchange_rates",
+      "primary_key": [
+        "date",
+        "currency"
+      ],
       "is_active": true
     }
   ]

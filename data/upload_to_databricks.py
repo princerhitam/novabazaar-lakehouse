@@ -170,7 +170,7 @@ def main():
     print("\n🚀 Uploading datasets directly into Unity Catalog Volumes...")
     
     local_base = "/Users/rhitambhaduri/.gemini/antigravity/scratch/novabazaar-lakehouse/data"
-    volume_base = "/Volumes/novamart/landing/raw_files"
+    volume_base = "/Volumes/novabazaar/landing/raw_files"
     
     files_to_upload = [
         # Olist Core
