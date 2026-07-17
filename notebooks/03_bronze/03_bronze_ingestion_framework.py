@@ -135,9 +135,9 @@ print("✅ log_pipeline_step function registered successfully.")
 # MAGIC        - `_source_system`: `lit(source_id)`
 # MAGIC        - `_ingestion_timestamp`: `current_timestamp()`
 # MAGIC        - `_batch_id`: `lit(run_id)`
-# MAGIC        - `_file_name`: `input_file_name()`
+# MAGIC        - `_file_name`: `df_raw["_metadata.file_path"]`
 # MAGIC     6. Save as Delta: `df_bronze.write.format("delta").mode("append").saveAsTable(f"{src['bronze_database']}.{src['bronze_table']}")`
-# MAGIC *   **💡 Tip**: Use `input_file_name()` from PySpark functions to capture the actual file path. This is vital for verifying data lineage!
+# MAGIC *   **💡 Tip**: In Unity Catalog, use `_metadata.file_path` to capture the file path. The legacy `input_file_name()` function is blocked by Unity Catalog security and will crash!
 
 # COMMAND ----------
 
@@ -182,7 +182,7 @@ def ingest_source(source_id, run_id):
             .withColumn("_source_system", lit(source_id)) \
             .withColumn("_ingestion_timestamp", current_timestamp()) \
             .withColumn("_batch_id", lit(run_id)) \
-            .withColumn("_file_name", input_file_name())
+            .withColumn("_file_name", df_raw["_metadata.file_path"])
             
         # 4. Write to managed Delta Bronze table (Append-only)
         df_bronze.write.format("delta").mode("append").saveAsTable(target_table_name)
