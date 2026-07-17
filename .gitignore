@@ -1,0 +1,36 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak
+venv.bak
+
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project-specific: Raw data files (too large for git)
+data/olist/*.csv
+data/synthetic/*.csv
+data/synthetic/*.json
+data/cdc/*.csv
+data/cdc/*.json
+*.zip
+
+# Databricks local state
+.ipynb_checkpoints/
+.databricks/
+*.dbc
